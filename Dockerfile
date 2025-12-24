@@ -1,36 +1,25 @@
 FROM python:3.11-slim
 
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
 WORKDIR /app
 
 # Install essential packages and dependencies needed for Playwright
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
     wget \
     gnupg \
     ca-certificates \
     procps \
     unzip \
-    # Additional dependencies that Playwright might need
-    libnss3 \
-    libnspr4 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libasound2 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first to leverage Docker cache
 COPY requirements.txt .
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN pip install --no-cache-dir -r requirements.txt
-RUN patchright install chromium --with-deps 
+RUN patchright install chromium --with-deps
 
 # Copy the rest of the application
 COPY . .
