@@ -1,0 +1,88 @@
+name: Build and Publish Docker Hub image
+
+on:
+  push:
+    branches: [ 'main' ]
+    tags:    ['v*', 'release-*']
+  workflow_dispatch:
+    inputs:
+      push:
+        description: 'Push image to Docker Hub (true/false)'
+        required: false
+        default: 'false'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    env:
+      IMAGE_NAME: ${{ github.repository }}
+      SHOULD_PUSH: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.push == 'true') || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Ensure Docker Hub secrets (only if pushing)
+        if: ${{ env.SHOULD_PUSH == 'true' }}
+        run: |
+          if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ] || [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "Required secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN are not set. Aborting."
+            exit 1
+          fi
+        shell: bash
+
+      - name: Login to Docker Hub
+        if: ${{ env.SHOULD_PUSH == 'true' }}
+        uses: docker/login-action@v2
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Show target image names
+        run: |
+          echo "Will push images:"
+          echo "  docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:${{ steps.tag.outputs.tag }}"
+          echo "  docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:latest"
+        shell: bash
+        if: ${{ env.SHOULD_PUSH == 'true' }}
+
+      - name: Extract version/tag
+        id: tag
+        run: |
+          echo "GIT_REF=${GITHUB_REF}"
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG=${GITHUB_REF#refs/tags/}
+            echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and (optionally) push multi-arch image to Docker Hub
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ env.SHOULD_PUSH == 'true' }}
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:${{ steps.tag.outputs.tag }}
+            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Image digest
+        run: |
+          echo "Published image tags for ${{ steps.tag.outputs.tag }}"

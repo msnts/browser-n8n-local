@@ -1,5 +1,7 @@
 # Browser Use Local Bridge for n8n
 
+![Docker Hub Publish](https://github.com/msnts/browser-n8n-local/actions/workflows/docker-publish.yml/badge.svg)
+
 This is a local bridge service that enables n8n to communicate with the Browser Use Python library. It mimics the Browser Use Cloud API endpoints but runs locally, allowing you to execute browser automation tasks without relying on the cloud service.
 
 ## Features
@@ -165,3 +167,55 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - [Browser Use](https://github.com/browser-use/browser-use) - The underlying browser automation library
 - [FastAPI](https://fastapi.tiangolo.com/) - The web framework used
 - [n8n](https://n8n.io/) - The workflow automation platform this bridge is designed for # browser-n8n-local
+
+**CI / CD: Docker image publishing**
+
+- **What the workflow does:** Builds a multi-arch Docker image (amd64 + arm64) and pushes to GitHub Container Registry (`ghcr.io`) and Docker Hub (optional) when commits are pushed to `main` or tags starting with `v` or `release-`.
+- **Workflow file:** [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml)
+
+- **Required repository secrets (for Docker Hub push):**
+   - `DOCKERHUB_USERNAME` : your Docker Hub username
+   - `DOCKERHUB_TOKEN` : a Docker Hub access token (or password, but token recommended)
+
+- **GitHub Packages (GHCR):** The workflow uses the built-in `GITHUB_TOKEN` so no additional secret is required to publish to `ghcr.io` for the same repository. Ensure you enable package publishing for your repository if your organization has additional policies.
+
+- **How tags are mapped:**
+   - Pushing a tag `v1.2.3` will publish `:v1.2.3` and update `:latest` on both registries (if Docker Hub credentials are provided).
+   - Pushing to `main` without a tag publishes `:latest`.
+
+Example: Pulling the image from GHCR
+
+```bash
+docker pull ghcr.io/<OWNER>/<REPO>:latest
+# or by tag
+docker pull ghcr.io/<OWNER>/<REPO>:v1.2.3
+```
+
+Example: Pulling the image from Docker Hub (if you configured `DOCKERHUB_USERNAME`):
+
+```bash
+docker pull <DOCKERHUB_USERNAME>/$(basename <REPO>):latest
+```
+
+If you'd like I can also add a `make` target or a simple GitHub action input to customize registry targets.
+
+**Testing the workflow on a branch (no push)**
+
+- You can test builds on a branch without publishing by using the manual workflow run and setting the `push` input to `false` (this is the default). This will run the full build (multi-arch) but will not push images to Docker Hub.
+
+Steps to test on a branch:
+
+1. Push your branch to GitHub, e.g. `feature/test-workflow`:
+
+```bash
+git checkout -b feature/test-workflow
+git push -u origin feature/test-workflow
+```
+
+2. On GitHub, go to the `Actions` tab → select `Build and Publish Docker Hub image` → `Run workflow`.
+
+3. In the `Run workflow` form, choose the branch `feature/test-workflow` and set the input `push` to `false`.
+
+4. Click `Run workflow`. The job will build the image but skip login/push steps. Check logs for build output.
+
+When you're ready to publish from that branch, re-run the workflow with `push=true` or create a tag and push the tag to trigger a publish.

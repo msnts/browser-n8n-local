@@ -427,6 +427,8 @@ def create_agent_config(
         "task": instruction,
         "llm": llm,
         "sensitive_data": sensitive_data,
+        "llm_timeout": int(os.environ.get("AGENT_LLM_TIMEOUT", 300)),
+        "step_timeout": int(os.environ.get("AGENT_STEP_TIMEOUT", 600)),
     }
 
     if browser:
